@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "projects": {
+    "hourcontdan": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "index": "src/index.html",
+            "polyfills": [
+              "zone.js"
+            ],
+            "styles": [
+              "src/styles.css"
+            ],
+            "tsConfig": "tsconfig.json",
+            "outputPath": "dist/hourcontdan"
+          }
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "buildTarget": "hourcontdan:build",
+            "proxyConfig": "proxy.json"
+          }
+        }
+      }
+    }
+  }
+}

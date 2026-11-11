@@ -1,0 +1,93 @@
+@if (data(); as d) {
+<div class="layout">
+  <aside>
+    <div class="brand"><span>H</span> HourContDan</div>
+    <nav aria-label="Navegación principal">
+      @for (item of sections; track item) {
+        <button type="button" [class.active]="section() === item" (click)="section.set(item)">{{ item }}
+          @if (item === 'Notificaciones' && unread(d)) { <small>{{ unread(d) }}</small> }
+        </button>
+      }
+    </nav>
+    <div class="profile"><strong>{{ d.user.name }}</strong><small>{{ labels[d.user.role] }}</small><button class="secondary" (click)="logout()">Cerrar sesión</button></div>
+  </aside>
+  <main>
+    <header><div><p class="eyebrow">Gestión de equipo</p><h1>{{ section() }}</h1></div>
+      <button [disabled]="busy()" (click)="mutate('attendance', 'POST', { action: openShift(d) ? 'out' : 'in' })">{{ openShift(d) ? 'Registrar salida' : 'Registrar entrada' }}</button>
+    </header>
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    @switch (section()) {
+      @case ('Resumen') {
+        <section class="welcome"><p class="eyebrow">Panel de trabajo</p><h2>Hola, {{ d.user.name }}</h2><p>{{ openShift(d) ? 'Tu jornada está en curso.' : 'Puedes registrar tu entrada desde este panel.' }}</p></section>
+        <div class="metrics">
+          <article><small>{{ d.user.role === 'employee' ? 'Mi perfil' : 'Personas registradas' }}</small><strong>{{ d.user.role === 'employee' ? d.user.name : d.employees.length }}</strong></article>
+          <article><small>Jornadas · últimos 30 días</small><strong>{{ d.attendance.length }}</strong></article>
+          <article><small>Tareas completadas</small><strong>{{ completed(d) }} / {{ d.tasks.length }}</strong></article>
+        </div>
+      }
+      @case ('Empleados') {
+        @if (d.user.role === 'admin') {
+          <section class="panel"><h2>Registrar empleado</h2>
+          <form (ngSubmit)="createEmployee()">
+            <label>Nombre<input name="name" [(ngModel)]="newEmployee.name" required maxlength="100"></label>
+            <label>Correo<input name="email" type="email" [(ngModel)]="newEmployee.email" required maxlength="160"></label>
+            <label>Rol<select name="role" [(ngModel)]="newEmployee.role"><option value="employee">Empleado</option><option value="manager">Gerente</option><option value="admin">Administrador</option></select></label>
+            <label>Contraseña inicial<input name="password" type="password" [(ngModel)]="newEmployee.password" required minlength="10" maxlength="128"></label>
+            <button [disabled]="busy()">Registrar</button>
+          </form></section>
+        }
+        <section class="panel scroll"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th>@if (d.user.role === 'admin') { <th>Acción</th> }</tr></thead><tbody>
+          @for (employee of d.employees; track employee.id) {
+            <tr><td>{{ employee.name }}</td><td>{{ employee.email }}</td><td>{{ labels[employee.role] }}</td>
+              @if (d.user.role === 'admin') { <td><button class="secondary" (click)="edit(employee)">Editar</button></td> }
+            </tr>
+          }
+        </tbody></table>
+        @if (editingId) {
+          <form (ngSubmit)="save()"><label>Nuevo nombre<input name="editedName" [(ngModel)]="editedName" required maxlength="100"></label><button [disabled]="busy()">Guardar</button><button type="button" class="secondary" (click)="editingId = 0">Cancelar</button></form>
+        }</section>
+      }
+      @case ('Asistencia') {
+        <section class="panel scroll"><h2>Marcaciones recientes</h2><table><thead><tr><th>Empleado</th><th>Entrada</th><th>Salida</th><th>Duración</th></tr></thead><tbody>
+          @for (a of d.attendance; track a.id) { <tr><td>{{ a.name }}</td><td>{{ date(a.started_at) }}</td><td>{{ date(a.ended_at) }}</td><td>{{ duration(a.minutes) }}</td></tr> }
+          @empty { <tr><td colspan="4">Aún no hay marcaciones.</td></tr> }
+        </tbody></table></section>
+      }
+      @case ('Tareas') {
+        @if (d.user.role !== 'employee') {
+          <section class="panel"><h2>Asignar tarea</h2><form (ngSubmit)="createTask()">
+            <label>Título<input name="title" [(ngModel)]="newTask.title" maxlength="140" required></label>
+            <label>Responsable<select name="assignee" [(ngModel)]="newTask.employeeId"><option [ngValue]="0" disabled>Seleccionar</option>@for (employee of d.employees; track employee.id) { <option [ngValue]="employee.id">{{ employee.name }}</option> }</select></label>
+            <button [disabled]="busy() || !newTask.employeeId">Asignar</button>
+          </form></section>
+        }
+        <section class="panel scroll"><table><thead><tr><th>Tarea</th><th>Responsable</th><th>Estado</th></tr></thead><tbody>
+          @for (task of d.tasks; track task.id) { <tr><td>{{ task.title }}</td><td>{{ task.name }}</td><td><select [attr.aria-label]="'Estado de ' + task.title" [value]="task.status" [disabled]="busy()" (change)="mutate('tasks/' + task.id, 'PATCH', { status: $any($event.target).value })">@for (status of statuses; track status.value) { <option [value]="status.value">{{ status.label }}</option> }</select></td></tr> }
+          @empty { <tr><td colspan="3">Aún no hay tareas asignadas.</td></tr> }
+        </tbody></table></section>
+      }
+      @case ('Informes') {
+        <section class="panel scroll"><h2>Actividad por persona</h2><p>Horas de jornadas cerradas en los últimos 30 días y avance histórico de tareas.</p><table><thead><tr><th>Empleado</th><th>Tiempo registrado</th><th>Tareas completadas</th></tr></thead><tbody>
+          @for (row of d.report; track row.id) { <tr><td>{{ row.name }}</td><td>{{ duration(row.minutes) }}</td><td>{{ row.completed }} / {{ row.total }}</td></tr> }
+        </tbody></table></section>
+      }
+      @case ('Notificaciones') {
+        <section class="panel"><h2>Notificaciones internas</h2>
+          @for (notice of d.notifications; track notice.id) {
+            <div class="notice"><span>{{ notice.message }}</span>@if (!notice.read_at) { <button class="secondary" [disabled]="busy()" (click)="mutate('notifications/' + notice.id, 'PATCH')">Marcar leída</button> }</div>
+          } @empty { <p>Aún no tienes notificaciones.</p> }
+        </section>
+      }
+    }
+  </main>
+</div>
+} @else {
+  <div class="login"><section class="panel"><div class="brand"><span>H</span> HourContDan</div><p class="eyebrow">Gestión de equipo</p><h1>Iniciar sesión</h1>
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    <form (ngSubmit)="login()">
+      <label>Correo<input name="email" type="email" [(ngModel)]="email" autocomplete="username" required></label>
+      <label>Contraseña<input name="password" type="password" [(ngModel)]="password" autocomplete="current-password" required></label>
+      <button [disabled]="busy()">{{ busy() ? 'Cargando…' : 'Entrar' }}</button>
+    </form>
+  </section></div>
+}
